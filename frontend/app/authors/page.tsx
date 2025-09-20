@@ -72,7 +72,7 @@ export default function AuthorsPage() {
                       className="btn btn-ghost"
                       onClick={() => router.push(`/authors/${encodeURIComponent(String(a.id))}/edit`)}
                     >
-                      ✏️ Editar
+                      Editar
                     </button>
                     <button
                       className="btn btn-danger"
@@ -81,7 +81,7 @@ export default function AuthorsPage() {
                         await removeAuthor(a.id);
                       }}
                     >
-                      🗑️ Eliminar
+                      Eliminar
                     </button>
                   </div>
                 </div>

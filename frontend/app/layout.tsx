@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 Bookstore <span className="text-brand-500">— CRUD Autores</span>
               </Link>
               <nav className="flex items-center gap-2">
-                <Link className="btn btn-ghost" href="/authors">📚 Ver autores</Link>
+                <Link className="btn btn-ghost" href="/authors"> Ver autores</Link>
                 <Link className="btn btn-primary" href="/crear">＋ Crear autor</Link>
               </nav>
             </div>
