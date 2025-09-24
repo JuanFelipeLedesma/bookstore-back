@@ -74,6 +74,12 @@ export default function AuthorsPage() {
                     >
                       Editar
                     </button>
+                    <Link
+                      className="btn btn-ghost"
+                      href={`/authors/${encodeURIComponent(String(a.id))}/prizes`}
+                    >
+                      Premios
+                    </Link>
                     <button
                       className="btn btn-danger"
                       onClick={async () => {

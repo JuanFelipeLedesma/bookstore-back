@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Providers from "./providers";
 import Link from "next/link";
+import SessionButton from "./SessionButton";
 
 export const metadata: Metadata = {
   title: "Authors CRUD",
@@ -19,8 +20,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 Bookstore <span className="text-brand-500">— CRUD Autores</span>
               </Link>
               <nav className="flex items-center gap-2">
+                <Link className="btn btn-ghost" href="/books">Ver libros</Link>
                 <Link className="btn btn-ghost" href="/authors"> Ver autores</Link>
+                <Link className="btn btn-ghost" href="/editorials">Editoriales</Link>
+                <Link className="btn btn-ghost" href="/dashboard">Dashboard</Link>
                 <Link className="btn btn-primary" href="/crear">＋ Crear autor</Link>
+                <SessionButton />
               </nav>
             </div>
           </header>

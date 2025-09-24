@@ -1,119 +1,224 @@
 "use client";
 
-import { FormEvent, JSX, useState } from "react";
-import { useAuthors } from "@/context/AuthorsContext";
 import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
-function AvatarPreview({ src, alt }: { src?: string; alt: string }) {
-  const url =
-    src && src.startsWith("http")
-      ? src
-      : src
-      ? `/images/${src.replace(/^\/+/, "")}`
-      : `https://ui-avatars.com/api/?name=${encodeURIComponent(alt)}&background=0D8ABC&color=fff`;
-  return (
-    // usamos <img> simple para evitar restricciones de domain en next/image
-    <img
-      src={url}
-      alt={alt}
-      width={72}
-      height={72}
-      className="h-18 w-18 rounded-2xl object-cover ring-1 ring-zinc-800"
-    />
-  );
-}
+type Id = string | number;
 
-export default function CrearAutorPage(): JSX.Element {
-  const { addAuthor } = useAuthors();
+type AuthorForm = {
+  name: string;
+  birthDate: string;
+  image?: string;
+  description?: string;
+};
+
+type BookForm = {
+  name: string;
+  description?: string;
+};
+
+type PrizeForm = {
+  name: string;
+  description?: string;
+};
+
+export default function CreateAuthorPage() {
   const router = useRouter();
 
-  const [name, setName] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [image, setImage] = useState("");
-  const [description, setDescription] = useState("");
-  const [pending, setPending] = useState(false);
+  // ----- formularios -----
+  const [author, setAuthor] = useState<AuthorForm>({
+    name: "",
+    birthDate: new Date().toISOString().slice(0, 10),
+    image: "",
+    description: "",
+  });
 
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return alert("El nombre es obligatorio");
-    setPending(true);
+  const [book, setBook] = useState<BookForm>({ name: "", description: "" });
+  const [prize, setPrize] = useState<PrizeForm>({ name: "", description: "" });
+
+  const [busy, setBusy] = useState(false);
+  const valid = useMemo(
+    () => author.name.trim().length >= 2 && book.name.trim().length >= 2 && prize.name.trim().length >= 2,
+    [author.name, book.name, prize.name]
+  );
+
+  // ----- helpers de fetch tipados -----
+  async function json<T>(res: Response): Promise<T> {
+    const txt = await res.text();
     try {
-      await addAuthor({ name, birthDate, image, description });
-      router.push("/authors");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      alert(`No se pudo crear: ${msg}`);
-    } finally {
-      setPending(false);
+      return JSON.parse(txt) as T;
+    } catch {
+      return {} as T;
     }
-  };
+  }
+
+  async function postJSON<T>(url: string, body: unknown): Promise<{ ok: boolean; status: number; data: T; raw: Response }> {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await json<T>(res);
+    return { ok: res.ok, status: res.status, data, raw: res };
+  }
+
+  async function tryPostOrPut(url: string): Promise<void> {
+    let res = await fetch(url, { method: "POST" });
+    if (!res.ok && res.status !== 204) {
+      res = await fetch(url, { method: "PUT" });
+    }
+    if (!res.ok && res.status !== 204) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`${url} -> ${res.status} ${txt}`);
+    }
+  }
+
+  async function onSubmit() {
+    if (!valid) return;
+    setBusy(true);
+    try {
+      const a = await postJSON<{ id: Id }>(`/api/authors`, author);
+      if (!a.ok) throw new Error(`POST /authors -> ${a.status}`);
+      const authorId = (a.data as { id?: Id })?.id;
+      if (authorId === undefined || authorId === null) throw new Error("El backend no devolvió id del autor.");
+
+      const b = await postJSON<{ id: Id }>(`/api/books`, { name: book.name, description: book.description });
+      if (!b.ok) throw new Error(`POST /books -> ${b.status}`);
+      const bookId = (b.data as { id?: Id })?.id;
+      if (bookId === undefined || bookId === null) throw new Error("El backend no devolvió id del libro.");
+
+      await tryPostOrPut(`/api/authors/${authorId}/books/${bookId}`);
+
+      const p = await postJSON<{ id: Id }>(`/api/prizes`, { name: prize.name, description: prize.description });
+      if (!p.ok) throw new Error(`POST /prizes -> ${p.status}`);
+      const prizeId = (p.data as { id?: Id })?.id;
+      if (prizeId === undefined || prizeId === null) throw new Error("El backend no devolvió id del premio.");
+
+      await tryPostOrPut(`/api/prizes/${prizeId}/author/${authorId}`);
+
+      alert("Autor creado y asociado con libro y premio ✅");
+      router.push("/authors");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error creando autor/libro/premio");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const initials =
+    author.name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase() ?? "")
+      .join("") || "NA";
 
   return (
-    <section className="min-h-[70vh] grid place-items-center">
-    <div className="w-full max-w-2xl">
-      <h1 className="text-xl font-semibold text-center mb-4">Crear autor</h1>
+    <main className="container-page">
+      <h1 className="text-xl font-semibold mb-6">Crear autor</h1>
 
-
-      <form onSubmit={onSubmit} className="card p-6 grid gap-5 w-full">
-        {/* Preview + nombre */}
-        <div className="flex items-center gap-4">
-          <AvatarPreview src={image} alt={name || "Nuevo autor"} />
-          <div className="flex-1">
-            <div className="label">Nombre</div>
+      <div className="card p-5 space-y-6 max-w-3xl mx-auto">
+        {/* Autor */}
+        <section className="space-y-3">
+          <h2 className="font-medium">Autor</h2>
+          <div className="flex items-center gap-3">
+            <div className="h-14 w-14 rounded-2xl bg-zinc-800 flex items-center justify-center text-lg font-semibold">
+              {initials}
+            </div>
             <input
               className="input"
-              placeholder="Gabriel García Márquez"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
+              placeholder="Nombre del autor"
+              value={author.name}
+              onChange={(e) => setAuthor((s) => ({ ...s, name: e.target.value }))}
             />
           </div>
-        </div>
+          <div>
+            <label className="label">Fecha de nacimiento</label>
+            <input
+              type="date"
+              className="input"
+              value={author.birthDate}
+              onChange={(e) => setAuthor((s) => ({ ...s, birthDate: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="label">URL imagen</label>
+            <input
+              className="input"
+              placeholder="https://…"
+              value={author.image}
+              onChange={(e) => setAuthor((s) => ({ ...s, image: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="label">Descripción</label>
+            <textarea
+              className="input"
+              rows={3}
+              placeholder="Biografía breve…"
+              value={author.description}
+              onChange={(e) => setAuthor((s) => ({ ...s, description: e.target.value }))}
+            />
+          </div>
+        </section>
 
-        <div>
-          <div className="label">Fecha de nacimiento</div>
-          <input
-            className="input"
-            type="date"
-            value={birthDate}
-            onChange={(e) => setBirthDate(e.target.value)}
-            required
-          />
-        </div>
+        {/* Libro */}
+        <section className="space-y-3">
+          <h2 className="font-medium">Libro (obligatorio)</h2>
+          <div>
+            <label className="label">Nombre del libro</label>
+            <input
+              className="input"
+              placeholder="Título"
+              value={book.name}
+              onChange={(e) => setBook((s) => ({ ...s, name: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="label">Descripción</label>
+            <textarea
+              className="input"
+              rows={2}
+              placeholder="Descripción del libro…"
+              value={book.description}
+              onChange={(e) => setBook((s) => ({ ...s, description: e.target.value }))}
+            />
+          </div>
+        </section>
 
-        <div>
-          <div className="label">URL imagen</div>
-          <input
-            className="input"
-            placeholder="https://..."
-            value={image}
-            onChange={(e) => setImage(e.target.value)}
-          />
-          <p className="mt-1 text-xs text-zinc-500">
-            Puedes pegar una URL externa o dejarlo vacío para usar un avatar automático.
-          </p>
-        </div>
-
-        <div>
-          <div className="label">Descripción</div>
-          <textarea
-            className="input min-h-28"
-            placeholder="Autor colombiano, Nobel de Literatura 1982…"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
+        {/* Premio */}
+        <section className="space-y-3">
+          <h2 className="font-medium">Premio (obligatorio)</h2>
+          <div>
+            <label className="label">Nombre del premio</label>
+            <input
+              className="input"
+              placeholder="Nombre del premio"
+              value={prize.name}
+              onChange={(e) => setPrize((s) => ({ ...s, name: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="label">Descripción</label>
+            <textarea
+              className="input"
+              rows={2}
+              placeholder="Descripción del premio…"
+              value={prize.description}
+              onChange={(e) => setPrize((s) => ({ ...s, description: e.target.value }))}
+            />
+          </div>
+        </section>
 
         <div className="flex gap-2">
-          <button type="submit" disabled={pending} className="btn btn-primary">
-            {pending ? "Guardando…" : "Guardar"}
+          <button disabled={!valid || busy} className="btn btn-primary" onClick={onSubmit}>
+            {busy ? "Guardando…" : "Guardar"}
           </button>
-          <button type="button" className="btn btn-ghost" onClick={() => router.back()}>
+          <button className="btn btn-ghost" onClick={() => router.push("/authors")}>
             Cancelar
           </button>
         </div>
-      </form>
       </div>
-    </section>
+    </main>
   );
 }

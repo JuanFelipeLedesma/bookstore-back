@@ -10,7 +10,6 @@ export default function Home() {
 
   return (
     <div className="relative">
-      {/* fondo decorativo */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10"
@@ -41,15 +40,6 @@ export default function Home() {
                 <Plus size={16} /> Crear autor
               </Link>
 
-              <a
-                href="/api/h2-console"
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-ghost"
-                title="Abrir consola H2 en una pestaña nueva"
-              >
-                <Database size={16} /> H2 Console <ExternalLink size={14} />
-              </a>
             </div>
           </div>
 
